@@ -1,39 +1,53 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 import urllib2
 import json
 from Adafruit_CharLCD import Adafruit_CharLCD
+from Adafruit_MCP230xx import MCP230XX_GPIO
 from subprocess import *
 import time
 from datetime import datetime
-import RPi.GPIO as GPIO
 import os
 
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(7, GPIO.OUT)
-p = GPIO.PWM(7, 1000)  # channel=7 frequency=1000Hz
-p.start(0) # 0-100, 30= prozent 
+
+# bus = 1         # Note you need to change the bus number to 0 if running on a revision 1 Raspberry Pi.
+# address = 0x20  # I2C address of the MCP230xx chip.
+# gpio_count = 16  # Number of GPIOs exposed by the MCP230xx chip, should be 8 or 16 depending on chip.
+# Create MCP230xx GPIO adapter.
+# mcp = MCP230XX_GPIO(bus, address, gpio_count)
+mcp = MCP230XX_GPIO(1, 0x20, 16) #hardcoded bus,adress and number of pins (16 for mcp23017)
+# Create LCD, passing in MCP GPIO adapter.
+lcd = Adafruit_CharLCD(pin_rs=1, pin_e=2, pins_db=[3,4,5,6], GPIO=mcp) #pins A1-A6, A0 and A7 unused, D4 lcd = A3 mpc, D5 lcd = A4 mcp, ...
 
 
-lcd = Adafruit_CharLCD()
-lcd.begin(16, 1)
+
+# prüfen ob schon da ist
+os.system('ls /sys/class/gpio | grep "gpio4" > /var/tmpram/gpio4.txt')
+with open('/var/tmpram/gpio4.txt') as f:
+		blubb = f.readlines()
+		print blubb
+		if blubb == []:
+			os.system('sudo echo 4 > /sys/class/gpio/export') #pin 4 Pi means Pin7 board
+os.system('sudo echo out > /sys/class/gpio/gpio4/direction')
 
 running = True
 while running:
 	#light out when i'm home, tested by ping my computer and gadgets in home-network
-	os.system('ping 192.168.178.52 -w 2| grep "ttl" > ping.txt') #julian tablet
-	os.system('ping 192.168.178.53 -w 2| grep "ttl" >> ping.txt') #julian tower-pc
-	os.system('ping 192.168.178.61 -w 2| grep "ttl" >> ping.txt') #julian smartphone
-	with open('ping.txt') as f:
+	os.system('ping 192.168.178.52 -w 2| grep "ttl" > /var/tmpram/ping.txt') #my tablet
+	os.system('ping 192.168.178.53 -w 2| grep "ttl" >> /var/tmpram/ping.txt') #my tower-pc
+	os.system('ping 192.168.178.61 -w 2| grep "ttl" >> /var/tmpram/ping.txt') #my smartphone
+	with open('/var/tmpram/ping.txt') as f:
 		bla = f.readlines()
 		if bla == []:
 			print "lightoff"
-			p.ChangeDutyCycle(0)	
+			os.system('sudo echo 0 > /sys/class/gpio/gpio4/value') #licht aus
+			lcd.clear()
+			# lcd.message(datetime.now().strftime('%H:%M   %d.%m.%y\n')) # print time & date
+			# lcd.message('ping fail')
 
 		else:
-			# print "lighton"
-			p.ChangeDutyCycle(70)
-			
+			print "lighton"
 			url = "http://live.kvv.de/webapp/departures/bystop/de:8212:404?maxInfos=3&key=377d840e54b59adbe53608ba1aad70e8"	
 			jsonstring = urllib2.urlopen(url).read()
 			kvvdata = json.loads(jsonstring)
@@ -56,6 +70,8 @@ while running:
 							continue
 						if restzeit == u'3 min':
 							continue
+						# print "route"
+						os.system('sudo echo 1 > /sys/class/gpio/gpio4/value') #licht an
 						lcd.clear()
 						lcd.message(datetime.now().strftime('%H:%M   %d.%m.%y\n')) # print time & date
 						if linie == u'S2':
@@ -63,11 +79,17 @@ while running:
 						else:				
 							lcd.message('{0} {1} {2}'.format(linie,ziel[0:8],restzeit))
 						# dazu noch len(restzeit) wenn mehr als 10min noch passt einbauen (nur 0:30uhr irgendwie)
+						
 			else:
 				lcd.clear()
 				lcd.message(datetime.now().strftime('%H:%M   %d.%m.%y\n')) # print time & date
 				lcd.message('KVV error')
 	time.sleep(15)		
+	
+os.system('sudo echo 4 > /sys/class/gpio/unexport')
 			
-p.stop()
-GPIO.cleanup()
+
+# error:  File "./kvv2.py", line 53, in <module>
+		# # print 'das oben ist die richtung' um 02:30 uhr, S2 rheinstetten um 03:18
+		# IndexError: list index out of range
+
