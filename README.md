@@ -11,4 +11,4 @@ to do: get road works / disruption / changes of train route from kvv
 
 
 
-to get it work: install python with json, urllib2, Adafruit_CharLCD, Adafruit_MCP230xx, Adafruit_I2C libraries and create folder /var/tmpram
+to get it work: install python with json, urllib2 libraries, get Adafruit_CharLCD, Adafruit_MCP230xx, Adafruit_I2C from github and create folder /var/tmpram
